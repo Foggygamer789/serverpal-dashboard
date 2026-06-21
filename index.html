@@ -65,6 +65,10 @@
   </div>
 
   <script>
+    const SUPABASE_URL = 'https://jgocsotfiuzleikiiern.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impnb2Nzb3RmaXV6bGVpa2lpZXJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwMDMzMjIsImV4cCI6MjA5NzU3OTMyMn0.cpeVKd-ZIvTtZhanE_Nnz18n44TE-QSzWKEpWDkkQRo';
+const { createClient } = supabase;
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const API = 'https://serverpal-backend.onrender.com'; // Replace after backend deployment
     let servers = [];
 
