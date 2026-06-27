@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ServerPal – Phase 0</title>
+  <!-- Supabase JS library -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
       --bg: #0f172a;
@@ -15,7 +17,7 @@
       --red: #ef4444;
     }
     body { margin:0; font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); display: flex; height: 100vh; }
-    .sidebar { width: 260px; background: var(--panel); padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
+    .sidebar { width: 260px; background: var(--panel); padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; overflow-y: auto; }
     .sidebar h1 { font-size: 1.5rem; margin:0; color: var(--accent); }
     .server-btn { background: transparent; border: 1px solid #334155; color: var(--text); padding: 0.75rem 1rem; border-radius: 8px; cursor: pointer; text-align: left; }
     .server-btn.active { border-color: var(--accent); background: rgba(59,130,246,0.1); }
@@ -33,6 +35,10 @@
     .chat-input { display: flex; gap: 0.5rem; }
     .chat-input input { flex:1; padding: 0.75rem; border-radius: 8px; border: none; background: #0f172a; color: white; font-size: 1rem; }
     .chat-input button { padding: 0.75rem 1.5rem; border: none; border-radius: 8px; background: var(--accent); color: white; font-weight: 600; cursor: pointer; }
+    .auth-input { width: 100%; margin-bottom: 0.5rem; padding: 0.5rem; border-radius: 6px; border: none; background: #0f172a; color: white; }
+    .auth-btn { width: 100%; padding: 0.5rem; border: none; border-radius: 6px; background: var(--accent); color: white; font-weight: 600; cursor: pointer; margin-bottom: 0.3rem; }
+    .logout-btn { width: 100%; padding: 0.5rem; border: none; border-radius: 6px; background: #ef4444; color: white; font-weight: 600; cursor: pointer; margin-top: 0.5rem; }
+    .download-btn { width: 100%; padding: 0.5rem; border: none; border-radius: 6px; background: #22c55e; color: white; font-weight: 600; cursor: pointer; margin-top: 0.5rem; }
     @media (max-width: 768px) {
       body { flex-direction: column; }
       .sidebar { width: 100%; flex-direction: row; overflow-x: auto; padding: 1rem; }
@@ -43,9 +49,23 @@
 <body>
   <div class="sidebar">
     <h1>⚡ ServerPal</h1>
+
+    <!-- Auth Panel -->
+    <div id="auth-panel">
+      <input type="email" id="auth-email" placeholder="Email" class="auth-input" />
+      <input type="password" id="auth-password" placeholder="Password" class="auth-input" />
+      <button onclick="signUp()" class="auth-btn">Sign Up</button>
+      <button onclick="logIn()" class="auth-btn">Log In</button>
+      <button onclick="logOut()" id="logout-btn" class="logout-btn" style="display:none;">Log Out</button>
+    </div>
+
+    <!-- Download Plugin Button (only visible after login) -->
+    <button onclick="downloadPlugin()" id="download-btn" class="download-btn" style="display:none;">⬇ Download Plugin</button>
+
     <div id="server-list"></div>
     <div style="margin-top:auto; font-size:0.8rem; color:#64748b;">Phase 0 · Read-only</div>
   </div>
+
   <div class="main">
     <div class="cards">
       <div class="card"><div class="label">TPS</div><div class="value" id="tps">--</div></div>
@@ -65,20 +85,65 @@
   </div>
 
   <script>
-    async function getAccessToken() {
-  const { data: { session } } = await supabaseClient.auth.getSession();
-  return session?.access_token || null;
-}
+    // --- Supabase Setup ---
     const SUPABASE_URL = 'https://jgocsotfiuzleikiiern.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impnb2Nzb3RmaXV6bGVpa2lpZXJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwMDMzMjIsImV4cCI6MjA5NzU3OTMyMn0.cpeVKd-ZIvTtZhanE_Nnz18n44TE-QSzWKEpWDkkQRo';
-const { createClient } = supabase;
-const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    const API = 'https://serverpal-backend.onrender.com'; // Replace after backend deployment
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impnb2Nzb3RmaXV6bGVpa2lpZXJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwMDMzMjIsImV4cCI6MjA5NzU3OTMyMn0.cpeVKd-ZIvTtZhanE_Nnz18n44TE-QSzWKEpWDkkQRo';
+    const { createClient } = supabase;
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // --- Backend API ---
+    const API = 'https://serverpal-backend.onrender.com';
+
+    // --- Auth helper ---
+    async function getAccessToken() {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      return session?.access_token || null;
+    }
+
+    // --- Auth functions ---
+    async function signUp() {
+      const email = document.getElementById('auth-email').value;
+      const password = document.getElementById('auth-password').value;
+      const { data, error } = await supabaseClient.auth.signUp({ email, password });
+      if (error) alert(error.message);
+      else alert('Check your email to confirm your account!');
+    }
+
+    async function logIn() {
+      const email = document.getElementById('auth-email').value;
+      const password = document.getElementById('auth-password').value;
+      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      if (error) alert(error.message);
+      else {
+        document.getElementById('auth-panel').style.display = 'none';
+        document.getElementById('logout-btn').style.display = 'block';
+        document.getElementById('download-btn').style.display = 'block';
+        loadServers();
+      }
+    }
+
+    async function logOut() {
+      await supabaseClient.auth.signOut();
+      document.getElementById('server-list').innerHTML = '';
+      document.getElementById('auth-panel').style.display = 'block';
+      document.getElementById('logout-btn').style.display = 'none';
+      document.getElementById('download-btn').style.display = 'none';
+      document.getElementById('tps').textContent = '--';
+      document.getElementById('players').textContent = '--';
+      document.getElementById('memory').textContent = '--';
+      document.getElementById('status').textContent = '--';
+    }
+
+    // --- Server list & metrics (authenticated) ---
     let servers = [];
 
     async function loadServers() {
+      const token = await getAccessToken();
+      if (!token) return;
       try {
-        const res = await fetch(`${API}/api/servers`);
+        const res = await fetch(`${API}/api/servers`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
         servers = await res.json();
         renderServerList();
         if (servers.length > 0) selectServer(servers[0].id);
@@ -101,8 +166,12 @@ const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     async function loadMetrics() {
       if (!selectedServer) return;
+      const token = await getAccessToken();
+      if (!token) return;
       try {
-        const res = await fetch(`${API}/api/servers/${selectedServer}`);
+        const res = await fetch(`${API}/api/servers/${selectedServer}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
         const data = await res.json();
         const tps = data.tps || 0;
         document.getElementById('tps').textContent = tps.toFixed(1);
@@ -120,10 +189,15 @@ const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       if (!msg || !selectedServer) return;
       addChatMessage(msg, 'user');
       input.value = '';
+      const token = await getAccessToken();
+      if (!token) return;
       try {
         const res = await fetch(`${API}/api/chat`, {
           method: 'POST',
-          headers: {'Content-Type':'application/json'},
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
           body: JSON.stringify({ serverId: selectedServer, message: msg })
         });
         const data = await res.json();
@@ -139,7 +213,31 @@ const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       div.scrollIntoView({ behavior: 'smooth' });
     }
 
-    loadServers();
+    // --- Download Plugin ---
+    async function downloadPlugin() {
+      const token = await getAccessToken();
+      if (!token) return alert('Please log in first.');
+      const res = await fetch(`${API}/api/download-plugin`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.error) return alert(data.error);
+      // Show key, config, and JAR link
+      const message = `Your plugin key: ${data.key}\n\nConfig.yml content (save as config.yml in plugins/ServerPal folder):\n${data.config}\n\nDownload the JAR from:\n${data.jar_url}\n\nPlace the JAR in your plugins folder and create the config.yml file.`;
+      alert(message);
+    }
+
+    // Initial load – if already logged in (session exists), show dashboard
+    (async () => {
+      const token = await getAccessToken();
+      if (token) {
+        document.getElementById('auth-panel').style.display = 'none';
+        document.getElementById('logout-btn').style.display = 'block';
+        document.getElementById('download-btn').style.display = 'block';
+        loadServers();
+      }
+    })();
+
     setInterval(loadMetrics, 5000);
   </script>
 </body>
